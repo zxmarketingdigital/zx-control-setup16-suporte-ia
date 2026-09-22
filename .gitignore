@@ -1,0 +1,12 @@
+.dev/
+.env
+*.env
+.env.*
+!.env.template
+__pycache__/
+*.pyc
+hub/config.js
+logs/
+.DS_Store
+node_modules/
+.wrangler/
