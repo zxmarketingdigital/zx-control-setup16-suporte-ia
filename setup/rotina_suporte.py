@@ -177,13 +177,19 @@ def responder(config, ticket_id, texto, resolver):
     ticket = tickets[0]
     if ticket.get("status") == "resolvido":
         raise SystemExit("ticket %s já está resolvido; use aprovar-kb/reabra no hub se precisar reabrir" % ticket_id)
-    status, dados = supabase_rest(config, "POST", "/sup_mensagens", {
-        "canal": ticket["canal"], "conversa_id": ticket["conversa_id"], "ticket_id": ticket_id,
-        "autor": "humano", "conteudo": texto,
-    })
-    if status not in (200, 201) or not isinstance(dados, list) or not dados or not dados[0].get("id"):
-        raise SystemExit("mensagem não foi gravada em sup_mensagens (HTTP %s): %s" % (status, str(dados)[:300]))
-    mensagem_id = dados[0]["id"]
+    # Repetir o comando depois de uma falha no PATCH do status não duplica a resposta:
+    # se a última mensagem humana do ticket já é este texto, reaproveita em vez de inserir.
+    ultima = _buscar(config, "/sup_mensagens?select=id,conteudo&ticket_id=eq.%s&autor=eq.humano&order=created_at.desc&limit=1" % ticket_id)
+    if ultima and (ultima[0].get("conteudo") or "").strip() == texto:
+        mensagem_id = ultima[0]["id"]
+    else:
+        status, dados = supabase_rest(config, "POST", "/sup_mensagens", {
+            "canal": ticket["canal"], "conversa_id": ticket["conversa_id"], "ticket_id": ticket_id,
+            "autor": "humano", "conteudo": texto,
+        })
+        if status not in (200, 201) or not isinstance(dados, list) or not dados or not dados[0].get("id"):
+            raise SystemExit("mensagem não foi gravada em sup_mensagens (HTTP %s): %s" % (status, str(dados)[:300]))
+        mensagem_id = dados[0]["id"]
     novo_status = "resolvido" if resolver else "aguardando_cliente"
     patch = {"status": novo_status}
     if resolver:
