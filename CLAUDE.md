@@ -24,3 +24,16 @@ como concluída só porque um comando terminou sem erro.
 
 As skills em `skills/` são autocontidas. Leia a skill da Etapa antes de conduzir
 o trabalho e não suponha que exista uma skill privada fora do repositório.
+
+## Depois da Etapa 7: operação do dia a dia
+
+`suporte-rotina-diaria` não é uma Etapa — é a skill que o aluno chama todo dia
+(ou agenda com `/schedule`) depois que o setup termina. Ela lê
+`setup/rotina_suporte.py coletar`, redige resposta para cada ticket aberto
+usando só a KB e o que o cliente já disse, pede aprovação do aluno na
+conversa, grava com `rotina_suporte.py responder` e entrega texto + link de
+WhatsApp prontos — o envio ao cliente continua manual, pelo WhatsApp do
+negócio. As candidatas de `sup_kb_candidatas` também são aprovadas
+(`aprovar-kb`) ou descartadas (`descartar-kb`) ali, em vez do hub. Ela
+complementa `suporte-auditoria` (Etapa 6), que só mede e nunca responde nem
+aprova nada.

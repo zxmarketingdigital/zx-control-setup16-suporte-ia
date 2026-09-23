@@ -4,10 +4,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") || "";
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
-const EVOLUTION_URL = (Deno.env.get("EVOLUTION_URL") || "").replace(/\/$/, "");
-const EVOLUTION_KEY = Deno.env.get("EVOLUTION_API_KEY") || "";
-const EVOLUTION_INSTANCE = Deno.env.get("EVOLUTION_INSTANCE") || "";
-const WEBHOOK_TOKEN = Deno.env.get("SUPORTE_WEBHOOK_TOKEN") || "";
 const ALLOWED_ORIGINS = (Deno.env.get("SUPORTE_ORIGENS") || "")
   .split(",").map((value) => value.trim()).filter(Boolean);
 const MODEL_TIMEOUT_MS = 25000;
@@ -47,7 +43,6 @@ type ModelResult = {
   outputTokens: number;
   error?: string;
 };
-type EvolutionItem = { remote: string; text: string; eventId?: string };
 type EscalationResult = {
   resposta: string; escalou: boolean; ticket_id: string | null; modelo: string | null;
   numero?: number | null; whatsapp_equipe?: string | null;
@@ -73,16 +68,6 @@ function jsonResponse(body: unknown, status: number, origin: string | null): Res
   return new Response(JSON.stringify(body), { status, headers: corsHeaders(origin) });
 }
 
-function constantTimeEqual(left: string, right: string): boolean {
-  const a = new TextEncoder().encode(left);
-  const b = new TextEncoder().encode(right);
-  const length = Math.max(a.length, b.length);
-  let difference = a.length ^ b.length;
-  for (let index = 0; index < length; index += 1) {
-    difference |= (a[index] || 0) ^ (b[index] || 0);
-  }
-  return difference === 0;
-}
 
 function bearer(request: Request): string {
   const value = request.headers.get("authorization") || "";
@@ -147,14 +132,6 @@ function formatPhone(digits: string): string {
   return `+${digits}`;
 }
 
-// Compara números com e sem o 9º dígito brasileiro (o JID do WhatsApp às vezes vem sem ele).
-function samePhone(a: string, b: string): boolean {
-  const norm = (v: string) => {
-    const d = v.replace(/\D/g, "");
-    return d.startsWith("55") && d.length === 13 && d[4] === "9" ? d.slice(0, 4) + d.slice(5) : d;
-  };
-  return norm(a) === norm(b);
-}
 
 // Número/WhatsApp do negócio para o cliente falar direto (sup_config.whatsapp_atendimento). Vazio = não mostra.
 function teamWhatsapp(config: ConfigMap): string {
@@ -179,9 +156,7 @@ function handoffText(
       "Essa eu não sei responder com segurança e prefiro não te passar uma informação errada.";
     parts.push(`${opener} Por isso abri o ${ticket} para a nossa equipe.`);
   }
-  if (canal === "whatsapp") {
-    parts.push("Uma pessoa da equipe vai continuar o atendimento aqui mesmo, no WhatsApp.");
-  } else if (contact?.whatsapp) {
+  if (contact?.whatsapp) {
     parts.push(`Vamos te chamar no WhatsApp ${formatPhone(contact.whatsapp)} para resolver.`);
   } else if (contact?.email) {
     parts.push(`Vamos te responder no e-mail ${contact.email}.`);
@@ -189,7 +164,7 @@ function handoffText(
     parts.push("A equipe vai responder nesta conversa.");
   }
   const team = teamWhatsapp(config);
-  if (team && canal !== "whatsapp" && !existing) parts.push(`Se preferir, fale direto com a gente no WhatsApp ${formatPhone(team)}.`);
+  if (team && !existing) parts.push(`Se preferir, fale direto com a gente no WhatsApp ${formatPhone(team)}.`);
   return parts.join(" ");
 }
 
@@ -333,18 +308,6 @@ async function findOpenTicket(canal: string, conversaId: string): Promise<{ id: 
   return data || null;
 }
 
-async function sendEvolution(number: string, text: string): Promise<boolean> {
-  if (!EVOLUTION_URL || !EVOLUTION_KEY || !EVOLUTION_INSTANCE || !text) return false;
-  try {
-    const response = await fetch(`${EVOLUTION_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`, {
-      method: "POST", headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ number, text }),
-    });
-    return response.ok;
-  } catch (_) {
-    return false;
-  }
-}
 
 async function escalate(
   canal: string, conversaId: string, message: string, contact: Contact | undefined,
@@ -352,7 +315,7 @@ async function escalate(
 ): Promise<EscalationResult> {
   const inserted = await supabase.from("sup_tickets").insert({
     canal, conversa_id: conversaId, contato_nome: contact?.nome || null,
-    contato_whatsapp: contact?.whatsapp || (canal === "whatsapp" ? conversaId : null),
+    contato_whatsapp: contact?.whatsapp || null,
     contato_email: contact?.email || null, assunto: message.slice(0, 160),
     motivo_escalonamento: reason, sugestao_ia: draft || null,
   }).select("id,numero").single();
@@ -389,50 +352,21 @@ async function escalate(
   };
 }
 
-// Cliente do site que responde no WhatsApp da equipe: a mensagem entra no ticket do site que já está aberto,
-// em vez de a IA começar outro atendimento do zero.
-async function findOpenSiteTicketByPhone(phone: string): Promise<{ id: string; status: string; numero: number } | null> {
-  const tail = phone.replace(/\D/g, "").slice(-8);
-  if (tail.length < 8) return null;
-  const { data, error } = await supabase.from("sup_tickets").select("id,status,numero,contato_whatsapp")
-    .eq("canal", "site").neq("status", "resolvido").like("contato_whatsapp", `%${tail}`)
-    .order("created_at", { ascending: false }).limit(5);
-  if (error) throw new Error(`tickets indisponíveis: ${error.message}`);
-  const found = (data || []).find((row: { contato_whatsapp: string | null }) => samePhone(row.contato_whatsapp || "", phone));
-  return found ? { id: found.id, status: found.status, numero: found.numero } : null;
-}
 
 async function processMessage(
-  canal: "site" | "whatsapp", conversaId: string, message: string, contact?: Contact, eventId?: string,
+  canal: "site", conversaId: string, message: string, contact?: Contact,
 ): Promise<EscalationResult> {
   const config = await getConfig();
-  if (eventId) {
-    const { data: alreadyProcessed, error: duplicateCheckError } = await supabase.from("sup_mensagens")
-      .select("id").eq("evento_id", eventId).maybeSingle();
-    if (duplicateCheckError) throw new Error(`deduplicação indisponível: ${duplicateCheckError.message}`);
-    if (alreadyProcessed) return { resposta: "", escalou: false, ticket_id: null, modelo: null };
-  }
-  const { error: clientError } = await supabase.from("sup_mensagens").insert({ canal, conversa_id: conversaId, autor: "cliente", conteudo: message, evento_id: eventId || null });
-  if (clientError && !(eventId && clientError.code === "23505")) throw new Error(`mensagem cliente não registrada: ${clientError.message}`);
-  if (clientError) return { resposta: "", escalou: false, ticket_id: null, modelo: null };
+  const { error: clientError } = await supabase.from("sup_mensagens").insert({ canal, conversa_id: conversaId, autor: "cliente", conteudo: message });
+  if (clientError) throw new Error(`mensagem cliente não registrada: ${clientError.message}`);
   const open = await findOpenTicket(canal, conversaId);
   if (open) {
     await supabase.from("sup_mensagens").update({ ticket_id: open.id }).eq("canal", canal).eq("conversa_id", conversaId)
       .eq("autor", "cliente").is("ticket_id", null);
     if (open.status === "aguardando_cliente") await supabase.from("sup_tickets").update({ status: "aberto" }).eq("id", open.id);
-    // no WhatsApp a equipe já está na conversa; no site, confirma que a mensagem foi anotada no ticket
-    const ack = canal === "site" ? handoffText(config, canal, contact, open.numero, "", true) : "";
+    // confirma que a mensagem foi anotada no ticket
+    const ack = handoffText(config, canal, contact, open.numero, "", true);
     return { resposta: ack, escalou: true, ticket_id: open.id, modelo: null, numero: open.numero, whatsapp_equipe: teamWhatsapp(config) || null };
-  }
-  if (canal === "whatsapp") {
-    const siteTicket = await findOpenSiteTicketByPhone(conversaId);
-    if (siteTicket) {
-      const { error: linkError } = await supabase.from("sup_mensagens").update({ ticket_id: siteTicket.id }).eq("canal", canal)
-        .eq("conversa_id", conversaId).eq("autor", "cliente").is("ticket_id", null);
-      if (linkError) throw new Error(`mensagem não vinculada ao ticket: ${linkError.message}`);
-      if (siteTicket.status === "aguardando_cliente") await supabase.from("sup_tickets").update({ status: "aberto" }).eq("id", siteTicket.id);
-      return { resposta: "", escalou: true, ticket_id: siteTicket.id, modelo: null, numero: siteTicket.numero };
-    }
   }
   if (/(atendente|humano|pessoa|falar com alguém|reclama)/i.test(message)) {
     return escalate(canal, conversaId, message, contact, "pedido_humano", "", config);
@@ -480,60 +414,21 @@ async function processMessage(
   return { resposta: best.resposta, escalou: false, ticket_id: null, modelo: model };
 }
 
-function evolutionText(payload: any): EvolutionItem | null {
-  const data = payload?.data || payload;
-  const key = data?.key || {};
-  const remote = String(key.remoteJid || data?.remoteJid || "");
-  if (!remote || key.fromMe || remote.endsWith("@g.us")) return null;
-  const text = String(data?.message?.conversation || data?.message?.extendedTextMessage?.text || data?.conversation || data?.extendedTextMessage?.text || "").trim();
-  const jid = remote.match(/^(\d{6,15})@s\.whatsapp\.net$/);
-  if (!jid || remote.includes("@broadcast") || remote.includes("@newsletter")) return null;
-  const candidate = String(key.id || data?.messageId || "").trim();
-  return text ? { remote: jid[1], text, eventId: candidate ? candidate.slice(0, 200) : undefined } : null;
-}
 
-async function handleEvolution(request: Request, payload: any, origin: string | null): Promise<Response> {
-  const token = new URL(request.url).searchParams.get("token") || "";
-  if (!WEBHOOK_TOKEN || !constantTimeEqual(token, WEBHOOK_TOKEN)) return jsonResponse({ error: "não autorizado" }, 401, origin);
-  if (String(payload?.event || "").toLowerCase() !== "messages.upsert") return jsonResponse({ ok: true, ignorado: true }, 200, origin);
-  try {
-    const item = evolutionText(payload);
-    if (item) {
-      const result = await processMessage("whatsapp", item.remote, item.text, undefined, item.eventId);
-      if (result.resposta) await sendEvolution(item.remote, result.resposta);
-    }
-  } catch (error) {
-    console.error("support-ai evolution error", String(error));
-  }
-  return jsonResponse({ ok: true }, 200, origin);
-}
 
 async function handleHuman(request: Request, body: any, origin: string | null): Promise<Response> {
   const user = await requireTeamUser(request);
   if (!user) return jsonResponse({ error: "não autorizado" }, 401, origin);
   if (!validText(body.ticket_id, 80) || !validText(body.conteudo, MAX_MESSAGE)) return jsonResponse({ error: "ticket_id e conteudo são obrigatórios" }, 400, origin);
-  const { data: ticket } = await supabase.from("sup_tickets").select("id,canal,conversa_id,atribuido_a,numero,contato_whatsapp").eq("id", body.ticket_id).maybeSingle();
+  const { data: ticket } = await supabase.from("sup_tickets").select("id,canal,conversa_id,atribuido_a").eq("id", body.ticket_id).maybeSingle();
   if (!ticket) return jsonResponse({ error: "ticket não encontrado" }, 404, origin);
   const { error: humanError } = await supabase.from("sup_mensagens").insert({ canal: ticket.canal, conversa_id: ticket.conversa_id, ticket_id: ticket.id, autor: "humano", autor_user_id: user.id, conteudo: body.conteudo });
   if (humanError) return jsonResponse({ enviado: false, erro: "resposta não registrada" }, 500, origin);
-  let enviado: boolean;
-  let whatsapp = false;
-  if (ticket.canal === "site") {
-    // a resposta fica no chat do site e, se o cliente deixou WhatsApp, também vai para lá (é o canal prometido no transbordo)
-    enviado = true;
-    if (ticket.contato_whatsapp) {
-      const negocio = configString(await getConfig(), "negocio_nome", "");
-      const header = `${negocio ? negocio + " · " : ""}ticket #${ticket.numero}`;
-      whatsapp = await sendEvolution(ticket.contato_whatsapp, `*${header}*\n\n${body.conteudo}`);
-    }
-  } else {
-    enviado = await sendEvolution(ticket.conversa_id, body.conteudo);
-    whatsapp = enviado;
-  }
-  const { error: statusError } = await supabase.from("sup_tickets").update({ status: enviado ? "aguardando_cliente" : "em_atendimento", atribuido_a: ticket.atribuido_a || user.id }).eq("id", ticket.id);
-  // a mensagem já saiu: devolver erro aqui faria a equipe reenviar e o cliente receber em dobro
-  if (statusError) return jsonResponse({ enviado, whatsapp, aviso: "resposta enviada, mas o status do ticket não foi atualizado" }, 200, origin);
-  return jsonResponse({ enviado, whatsapp }, 200, origin);
+  // A resposta fica registrada no ticket (e aparece no chat do site se o cliente voltar).
+  // O contato com o cliente é feito pela equipe no WhatsApp do negócio — o painel mostra o link direto.
+  const { error: statusError } = await supabase.from("sup_tickets").update({ status: "aguardando_cliente", atribuido_a: ticket.atribuido_a || user.id }).eq("id", ticket.id);
+  if (statusError) return jsonResponse({ enviado: true, aviso: "resposta registrada, mas o status do ticket não foi atualizado" }, 200, origin);
+  return jsonResponse({ enviado: true }, 200, origin);
 }
 
 async function handleSuggestion(request: Request, body: any, origin: string | null): Promise<Response> {
@@ -629,10 +524,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method !== "POST") return jsonResponse({ error: "método não permitido" }, 405, origin);
   let body: any;
   try { body = await request.json(); } catch (_) { return jsonResponse({ error: "JSON inválido" }, 400, origin); }
-  if (body?.event) {
-    try { return await handleEvolution(request, body, origin); }
-    catch (error) { console.error("support-ai webhook error", String(error)); return jsonResponse({ ok: true }, 200, origin); }
-  }
   try {
     if (body?.acao === "ping") return await handlePing(origin);
     if (body?.acao === "historico") return await handleHistory(body, origin);

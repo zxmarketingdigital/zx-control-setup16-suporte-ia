@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Etapa 3: valida o provedor, publica a Edge Function e faz smoke test."""
-import json
 import os
 import secrets
 import shutil
@@ -147,48 +146,6 @@ def _deploy(cli):
     return ok
 
 
-def _configurar_evolution(config, endpoint, token):
-    url = cfg_get(config, "evolution_url", "")
-    key = cfg_get(config, "evolution_api_key", "")
-    instance = cfg_get(config, "evolution_instance", "")
-    if not (url and key and instance):
-        print("⚠️  Evolution não configurada; webhook foi pulado.")
-        return True
-    corpo = {
-        "webhook": {
-            "enabled": True,
-            "url": "%s?token=%s" % (endpoint, token),
-            "events": ["MESSAGES_UPSERT"],
-            "byEvents": False,
-            "base64": False,
-        }
-    }
-    status, response_body = http_json(
-        "POST",
-        "%s/webhook/set/%s" % (str(url).rstrip("/"), instance),
-        headers={"apikey": key},
-        corpo=corpo,
-        timeout=AI_TIMEOUT,
-    )
-    if status in (200, 201):
-        read_status, read_body = http_json(
-            "GET",
-            "%s/webhook/find/%s" % (str(url).rstrip("/"), instance),
-            headers={"apikey": key},
-            timeout=AI_TIMEOUT,
-        )
-        confirmation = json.dumps({"write": response_body, "read": read_body}, ensure_ascii=False).lower()
-        endpoint_lower = endpoint.lower()
-        events_ok = "messages_upsert" in confirmation or "messages.upsert" in confirmation
-        if read_status == 200 and endpoint_lower in confirmation and events_ok:
-            print("✅ Webhook da Evolution configurado e conferido")
-            return True
-        print("❌ A Evolution respondeu, mas a leitura posterior não confirmou URL/evento")
-        return False
-    print("❌ Webhook da Evolution não foi confirmado (HTTP %s)" % status)
-    return False
-
-
 def _smoke(config, endpoint, origem):
     anon = cfg_get(config, "supabase_anon_key", "")
     headers = {"Content-Type": "application/json"}
@@ -282,24 +239,17 @@ def main():
         print("❌ Limiar deve estar entre 0 e 1 e teto deve ser positivo.")
         return 1
 
-    token = str(suporte.get("webhook_token") or secrets.token_urlsafe(32))
     origens = suporte.get("origens", "")
     valores = {
         "GEMINI_API_KEY": chave if provedor == "gemini" else "",
         "ANTHROPIC_API_KEY": chave if provedor == "anthropic" else "",
-        "EVOLUTION_URL": cfg_get(config, "evolution_url", ""),
-        "EVOLUTION_API_KEY": cfg_get(config, "evolution_api_key", ""),
-        "EVOLUTION_INSTANCE": cfg_get(config, "evolution_instance", ""),
-        "SUPORTE_WEBHOOK_TOKEN": token,
         "SUPORTE_ORIGENS": origens,
     }
     if not _secrets_set(cli, valores) or not _deploy(cli):
         return 1
 
     endpoint = base + "/functions/v1/support-ai"
-    if not _configurar_evolution(config, endpoint, token):
-        return 1
-    suporte.update({"provedor": provedor, "modelo_barato": barato, "modelo_forte": forte, "limiar_confianca": float(limiar), "teto_diario_usd": float(teto), "webhook_token": token})
+    suporte.update({"provedor": provedor, "modelo_barato": barato, "modelo_forte": forte, "limiar_confianca": float(limiar), "teto_diario_usd": float(teto)})
     save_config(config)
     if not _smoke(config, endpoint, str(origens).split(",")[0].strip() if origens else ""):
         print("❌ A Edge Function foi publicada, mas o smoke não foi confirmado.")

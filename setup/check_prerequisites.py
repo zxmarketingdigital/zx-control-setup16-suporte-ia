@@ -90,12 +90,6 @@ def main():
         _linha("fail", "config.json", "arquivo ausente", "execute o Setup anterior que cria %s" % CONFIG_PATH)
         obrigatorias.append("config.json")
 
-    evolution = cfg_get(config, "evolution_url", "") and cfg_get(config, "evolution_api_key", "") and cfg_get(config, "evolution_instance", "")
-    if evolution:
-        _linha("ok", "Evolution", "configurada; canal WhatsApp disponível", "")
-    else:
-        _linha("warn", "Evolution", "não configurada; somente o canal site funcionará", "configure evolution_url, evolution_api_key e evolution_instance quando quiser WhatsApp")
-
     if cfg_get(config, "resend_api_key", ""):
         _linha("ok", "Resend", "configurado; auditoria poderá enviar e-mail", "")
     else:

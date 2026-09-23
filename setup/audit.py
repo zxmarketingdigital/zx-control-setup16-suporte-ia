@@ -101,24 +101,6 @@ def agendamento():
     return resultado.get("ok") is True, resultado.get("detalhe", "sem detalhe")
 
 
-def evolution(config):
-    base = cfg_get(config, "evolution_url", "")
-    instancia = cfg_get(config, "evolution_instance", "")
-    chave = cfg_get(config, "evolution_api_key", "")
-    if not base or not instancia:
-        return True, "Evolution não configurada; canal site permanece disponível"
-    if not chave:
-        return False, "Evolution configurada sem chave"
-    status, dados = http_json(
-        "GET",
-        str(base).rstrip("/") + "/webhook/find/" + str(instancia),
-        headers={"apikey": str(chave)},
-    )
-    suporte = str((cfg_get(config, "supabase_url", "") or "")).rstrip("/") + "/functions/v1/support-ai"
-    texto = str(dados)
-    return status == 200 and suporte in texto, "webhook conferido" if status == 200 and suporte in texto else "webhook não aponta para support-ai"
-
-
 def segredo_front():
     caminho = ROOT / "hub" / "config.js"
     if not caminho.exists():
@@ -141,7 +123,6 @@ def main():
         ("Membro admin", lambda: admin(config)),
         ("KB mínima", lambda: kb(config)),
         ("Agendamento", agendamento),
-        ("Webhook Evolution", lambda: evolution(config)),
         ("Segredos no hub", segredo_front),
     ]
     falhas = 0

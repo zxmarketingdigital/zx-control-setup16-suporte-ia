@@ -163,7 +163,7 @@
   async function submitReply(event) {
     event.preventDefault(); if (!state.currentTicket) return; var content = $("reply-content").value.trim(); if (!content) return;
     $("reply-button").disabled = true; setStatus($("reply-status"), "Enviando resposta…", false);
-    try { var data = await callFunction({ acao: "responder_humano", ticket_id: state.currentTicket.id, conteudo: content }); if (data.enviado === false) throw new Error("A resposta não foi enviada."); await openTicket(state.currentTicket.id); setStatus($("reply-status"), "Resposta enviada.", false); } catch (error) { setStatus($("reply-status"), errorText(error), true); } finally { $("reply-button").disabled = false; }
+    try { var data = await callFunction({ acao: "responder_humano", ticket_id: state.currentTicket.id, conteudo: content }); if (data.enviado === false) throw new Error("A resposta não foi registrada."); await openTicket(state.currentTicket.id); setStatus($("reply-status"), data.aviso || "Resposta registrada no ticket.", false); } catch (error) { setStatus($("reply-status"), errorText(error), true); } finally { $("reply-button").disabled = false; }
   }
 
   async function requestSuggestion() {

@@ -7,7 +7,7 @@ config ou chamada HTTP por conta própria.
 
 Config do aluno: ~/.operacao-ia/config/config.json (criado nos Setups 1 e 2).
 Os Setups anteriores gravaram as mesmas chaves em DOIS formatos — aninhado
-(config["evolution"]["api_key"]) e plano (config["evolution_api_key"]). Por isso
+(config["email"]["api_key"]) e plano (config["resend_api_key"]). Por isso
 toda leitura passa por `cfg_get`, que tenta os dois.
 """
 import getpass
@@ -28,7 +28,7 @@ SUPORTE_DIR = OPERACAO / "suporte"
 ESTADO_PATH = SUPORTE_DIR / "estado.json"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Chamadas HTTP curtas (REST do Supabase, Evolution, Resend). Processo longo usa o
+# Chamadas HTTP curtas (REST do Supabase, Resend). Processo longo usa o
 # próprio timeout do chamador. Override por env, valor inválido cai no default.
 def _timeout_env(nome, default):
     # type: (str, int) -> int
@@ -47,9 +47,6 @@ _ALIASES = {
     "supabase_anon_key": [("supabase_anon_key",), ("supabase", "anon_key")],
     "supabase_service_role_key": [("supabase_service_role_key",), ("supabase", "service_role_key")],
     "supabase_project_id": [("supabase_project_id",), ("supabase", "project_id")],
-    "evolution_url": [("evolution", "base_url"), ("evolution_api_url",)],
-    "evolution_api_key": [("evolution", "api_key"), ("evolution_api_key",)],
-    "evolution_instance": [("evolution", "instance_name"), ("evolution_instance",)],
     "resend_api_key": [("email", "api_key"), ("resend_api_key",)],
     "email_from": [("email", "from_email"), ("email_from",)],
     "email_aluno": [("email", "test_recipient"), ("email_aluno",)],
