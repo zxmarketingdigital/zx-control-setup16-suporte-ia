@@ -367,6 +367,10 @@ grant execute on function public.sup_reservar_custo(numeric, numeric, text, text
 -- Busca na base e custo do dia rodam SECURITY DEFINER: só a Edge Function (service_role) chama.
 revoke execute on function public.sup_buscar_kb(text, integer) from authenticated;
 revoke execute on function public.sup_custo_hoje() from authenticated;
+-- O Supabase concede EXECUTE e TRUNCATE/REFERENCES/TRIGGER a authenticated por privilégio default;
+-- `revoke ... from public` não remove isso. Reserva de custo é exclusiva da Edge Function.
+revoke execute on function public.sup_reservar_custo(numeric, numeric, text, text) from authenticated;
+revoke truncate, references, trigger on public.sup_equipe, public.sup_config, public.sup_tickets, public.sup_mensagens, public.sup_kb, public.sup_kb_candidatas, public.sup_uso_ia from authenticated;
 revoke all on function public.sup_eh_membro() from anon;
 revoke all on function public.sup_eh_admin() from anon;
 revoke all on function public.sup_buscar_kb(text, integer) from anon;
