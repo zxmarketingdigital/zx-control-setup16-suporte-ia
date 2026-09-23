@@ -36,6 +36,7 @@ def coletar(config, dias):
     mensagens = _buscar(config, "/sup_mensagens?select=canal,conversa_id,autor,created_at,modelo&%s&limit=10000" % _filtro_data("created_at", inicio))
     tickets = _buscar(config, "/sup_tickets?select=status,created_at,updated_at,resolvido_em,conversa_id,canal&%s&limit=10000" % _filtro_data("created_at", inicio))
     tickets_abertos_lista = _buscar(config, "/sup_tickets?select=status,created_at,updated_at,resolvido_em,conversa_id,canal&status=neq.resolvido&limit=10000")
+    resolvidos_periodo = _buscar(config, "/sup_tickets?select=id&%s&limit=10000" % _filtro_data("resolvido_em", inicio))
     uso = _buscar(config, "/sup_uso_ia?select=etapa,custo_usd,erro,created_at&%s&limit=10000" % _filtro_data("created_at", inicio))
     candidatas = _buscar(config, "/sup_kb_candidatas?select=pergunta,ocorrencias,status,created_at&status=eq.pendente&order=ocorrencias.desc&limit=5")
     config_rows = _buscar(config, "/sup_config?select=chave,valor&limit=1000")
@@ -44,10 +45,11 @@ def coletar(config, dias):
     clientes = [item for item in mensagens if item.get("autor") == "cliente"]
     conversas_cliente = {(item.get("canal"), item.get("conversa_id")) for item in clientes if item.get("conversa_id")}
     conversas_ia = {(item.get("canal"), item.get("conversa_id")) for item in ia if item.get("conversa_id")}
-    conversas_com_ticket = {(item.get("canal"), item.get("conversa_id")) for item in tickets_abertos_lista}
+    # conversa que virou ticket no período (resolvido ou não) não conta como resolvida pela IA
+    conversas_com_ticket = {(item.get("canal"), item.get("conversa_id")) for item in tickets + tickets_abertos_lista}
     resolvidas_ia = (conversas_cliente & conversas_ia) - conversas_com_ticket
     novos = len(tickets)
-    resolvidos = len([item for item in tickets if item.get("status") == "resolvido" or item.get("resolvido_em")])
+    resolvidos = len(resolvidos_periodo)
     abertos = len(tickets_abertos_lista)
     limite_backlog = agora - timedelta(hours=24)
     backlog = []

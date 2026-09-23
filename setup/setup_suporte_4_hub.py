@@ -55,11 +55,19 @@ def auth_headers(service_key):
 
 def auth_users(config, service_key):
     base = str(cfg_get(config, "supabase_url", "")).rstrip("/")
-    status, body = http_json("GET", base + "/auth/v1/admin/users?per_page=1000&page=1", headers=auth_headers(service_key))
-    if status != 200 or not isinstance(body, dict):
-        return []
-    users = body.get("users", [])
-    return users if isinstance(users, list) else []
+    todos = []
+    pagina = 1
+    while True:
+        status, body = http_json("GET", base + "/auth/v1/admin/users?per_page=1000&page=%d" % pagina, headers=auth_headers(service_key))
+        if status != 200 or not isinstance(body, dict):
+            # sem a lista não dá pra saber se o usuário já existe — parar em vez de tentar criar duplicado
+            raise SystemExit("Não consegui listar os usuários do Supabase Auth (HTTP %s)." % status)
+        users = body.get("users", [])
+        users = users if isinstance(users, list) else []
+        todos.extend(users)
+        if len(users) < 1000:
+            return todos
+        pagina += 1
 
 
 def find_user(users, email):
