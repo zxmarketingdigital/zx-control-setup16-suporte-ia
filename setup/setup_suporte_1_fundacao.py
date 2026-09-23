@@ -95,6 +95,9 @@ def _configurar_negocio(config):
     print("  (\"se preferir, fale direto com a gente no WhatsApp ...\"). Use o número do NEGÓCIO, nunca um pessoal.")
     whats = ask("WhatsApp de atendimento com DDI (ex.: 5511999999999) — Enter para não mostrar", str(whats_atual) if whats_atual else "")
     whats = "".join(ch for ch in whats if ch.isdigit())
+    if len(whats) in (10, 11) and not whats.startswith("55"):
+        whats = "55" + whats  # número brasileiro digitado sem DDI; o link wa.me exige o formato internacional
+        print("  ℹ️  Acrescentei o DDI 55: %s" % whats)
     if whats and not 8 <= len(whats) <= 15:
         print("  ⚠️  Número inválido — deixei sem WhatsApp de atendimento. Rode esta etapa de novo para corrigir.")
         whats = ""

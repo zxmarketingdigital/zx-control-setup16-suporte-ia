@@ -427,8 +427,9 @@ async function processMessage(
   if (canal === "whatsapp") {
     const siteTicket = await findOpenSiteTicketByPhone(conversaId);
     if (siteTicket) {
-      await supabase.from("sup_mensagens").update({ ticket_id: siteTicket.id }).eq("canal", canal).eq("conversa_id", conversaId)
-        .eq("autor", "cliente").is("ticket_id", null);
+      const { error: linkError } = await supabase.from("sup_mensagens").update({ ticket_id: siteTicket.id }).eq("canal", canal)
+        .eq("conversa_id", conversaId).eq("autor", "cliente").is("ticket_id", null);
+      if (linkError) throw new Error(`mensagem não vinculada ao ticket: ${linkError.message}`);
       if (siteTicket.status === "aguardando_cliente") await supabase.from("sup_tickets").update({ status: "aberto" }).eq("id", siteTicket.id);
       return { resposta: "", escalou: true, ticket_id: siteTicket.id, modelo: null, numero: siteTicket.numero };
     }
@@ -530,7 +531,8 @@ async function handleHuman(request: Request, body: any, origin: string | null): 
     whatsapp = enviado;
   }
   const { error: statusError } = await supabase.from("sup_tickets").update({ status: enviado ? "aguardando_cliente" : "em_atendimento", atribuido_a: ticket.atribuido_a || user.id }).eq("id", ticket.id);
-  if (statusError) return jsonResponse({ enviado: false, erro: "ticket não atualizado" }, 500, origin);
+  // a mensagem já saiu: devolver erro aqui faria a equipe reenviar e o cliente receber em dobro
+  if (statusError) return jsonResponse({ enviado, whatsapp, aviso: "resposta enviada, mas o status do ticket não foi atualizado" }, 200, origin);
   return jsonResponse({ enviado, whatsapp }, 200, origin);
 }
 
