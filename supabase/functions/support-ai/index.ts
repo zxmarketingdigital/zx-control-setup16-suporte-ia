@@ -189,7 +189,7 @@ function handoffText(
     parts.push("A equipe vai responder nesta conversa.");
   }
   const team = teamWhatsapp(config);
-  if (team && canal !== "whatsapp") parts.push(`Se preferir, fale direto com a gente no WhatsApp ${formatPhone(team)}.`);
+  if (team && canal !== "whatsapp" && !existing) parts.push(`Se preferir, fale direto com a gente no WhatsApp ${formatPhone(team)}.`);
   return parts.join(" ");
 }
 
