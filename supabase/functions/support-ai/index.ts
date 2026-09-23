@@ -117,6 +117,18 @@ function validText(value: unknown, max: number): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
 }
 
+function cleanContact(value: unknown): Contact | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const text = (v: unknown, max: number) => typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
+  const nome = text(raw.nome, 120);
+  const emailRaw = text(raw.email, 160);
+  const email = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw.toLowerCase() : undefined;
+  const digits = typeof raw.whatsapp === "string" ? raw.whatsapp.replace(/\D/g, "") : "";
+  const whatsapp = digits.length >= 8 && digits.length <= 15 ? digits : undefined;
+  return nome || email || whatsapp ? { nome, email, whatsapp } : undefined;
+}
+
 function validConversation(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && value.length <= MAX_CONVERSATION &&
     /^[A-Za-z0-9_-]+$/.test(value);
@@ -254,8 +266,8 @@ async function logUsage(result: ModelResult, etapa: string, confidence: number |
   if (error) throw new Error(`uso de IA não registrado: ${error.message}`);
 }
 
-async function findOpenTicket(canal: string, conversaId: string): Promise<{ id: string; status: string } | null> {
-  const { data, error } = await supabase.from("sup_tickets").select("id,status")
+async function findOpenTicket(canal: string, conversaId: string): Promise<{ id: string; status: string; numero: number } | null> {
+  const { data, error } = await supabase.from("sup_tickets").select("id,status,numero")
     .eq("canal", canal).eq("conversa_id", conversaId).neq("status", "resolvido")
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error(`tickets indisponíveis: ${error.message}`);
@@ -278,18 +290,18 @@ async function sendEvolution(number: string, text: string): Promise<boolean> {
 async function escalate(
   canal: string, conversaId: string, message: string, contact: Contact | undefined,
   reason: string, draft: string, config: ConfigMap,
-): Promise<{ resposta: string; escalou: boolean; ticket_id: string | null; modelo: string | null }> {
+): Promise<{ resposta: string; escalou: boolean; ticket_id: string | null; modelo: string | null; numero?: number | null }> {
   const transbordo = configString(config, "mensagem_transbordo", "Vou encaminhar sua mensagem para uma pessoa da equipe.");
   const inserted = await supabase.from("sup_tickets").insert({
     canal, conversa_id: conversaId, contato_nome: contact?.nome || null,
     contato_whatsapp: contact?.whatsapp || (canal === "whatsapp" ? conversaId : null),
     contato_email: contact?.email || null, assunto: message.slice(0, 160),
     motivo_escalonamento: reason, sugestao_ia: draft || null,
-  }).select("id").single();
-  let ticket = inserted.data;
+  }).select("id,numero").single();
+  let ticket = inserted.data as { id: string; numero: number } | null;
   if (inserted.error) {
     if (inserted.error.code !== "23505") throw new Error(`ticket não criado: ${inserted.error.message}`);
-    ticket = await findOpenTicket(canal, conversaId) as { id: string } | null;
+    ticket = await findOpenTicket(canal, conversaId);
   }
   const ticketId = ticket?.id || null;
   if (ticketId) {
@@ -309,12 +321,13 @@ async function escalate(
     escalou: Boolean(ticketId),
     ticket_id: ticketId,
     modelo: null,
+    numero: ticket?.numero ?? null,
   };
 }
 
 async function processMessage(
   canal: "site" | "whatsapp", conversaId: string, message: string, contact?: Contact, eventId?: string,
-): Promise<{ resposta: string; escalou: boolean; ticket_id: string | null; modelo: string | null }> {
+): Promise<{ resposta: string; escalou: boolean; ticket_id: string | null; modelo: string | null; numero?: number | null }> {
   const config = await getConfig();
   if (eventId) {
     const { data: alreadyProcessed, error: duplicateCheckError } = await supabase.from("sup_mensagens")
@@ -330,7 +343,7 @@ async function processMessage(
     await supabase.from("sup_mensagens").update({ ticket_id: open.id }).eq("canal", canal).eq("conversa_id", conversaId)
       .eq("autor", "cliente").is("ticket_id", null);
     if (open.status === "aguardando_cliente") await supabase.from("sup_tickets").update({ status: "aberto" }).eq("id", open.id);
-    return { resposta: "", escalou: true, ticket_id: open.id, modelo: null };
+    return { resposta: "", escalou: true, ticket_id: open.id, modelo: null, numero: open.numero };
   }
   if (/(atendente|humano|pessoa|falar com alguém|reclama)/i.test(message)) {
     return escalate(canal, conversaId, message, contact, "pedido_humano", "", config);
@@ -372,7 +385,7 @@ async function processMessage(
     return escalated;
   }
   const openedMeanwhile = await findOpenTicket(canal, conversaId);
-  if (openedMeanwhile) return { resposta: "", escalou: true, ticket_id: openedMeanwhile.id, modelo: null };
+  if (openedMeanwhile) return { resposta: "", escalou: true, ticket_id: openedMeanwhile.id, modelo: null, numero: openedMeanwhile.numero };
   const { error: answerError } = await supabase.from("sup_mensagens").insert({ canal, conversa_id: conversaId, autor: "ia", conteudo: best.resposta, modelo: model, confianca: best.confianca });
   if (answerError) throw new Error(`resposta IA não registrada: ${answerError.message}`);
   return { resposta: best.resposta, escalou: false, ticket_id: null, modelo: model };
@@ -444,7 +457,7 @@ async function handleHistory(body: any, origin: string | null): Promise<Response
   if (!originAllowed(origin)) return jsonResponse({ error: "origem não permitida" }, 403, origin);
   if (body.canal !== "site" || !validConversation(body.conversa_id)) return jsonResponse({ error: "conversa inválida" }, 400, origin);
   let query = supabase.from("sup_mensagens").select("id,autor,conteudo,created_at")
-    .eq("canal", "site").eq("conversa_id", body.conversa_id).in("autor", ["ia", "humano"]).order("created_at", { ascending: true });
+    .eq("canal", "site").eq("conversa_id", body.conversa_id).in("autor", ["cliente", "ia", "humano"]).order("created_at", { ascending: true }).limit(200);
   if (typeof body.desde === "string" && body.desde.length < 80) query = query.gt("created_at", body.desde);
   const { data, error } = await query;
   return error ? jsonResponse({ error: "não foi possível carregar o histórico" }, 500, origin) : jsonResponse({ mensagens: data || [] }, 200, origin);
@@ -456,7 +469,7 @@ async function handleSiteMessage(body: any, origin: string | null): Promise<Resp
     return jsonResponse({ error: "mensagem, canal ou conversa inválidos" }, 400, origin);
   }
   const message = body.mensagem.trim();
-  const contact = body.contato || undefined;
+  const contact = cleanContact(body.contato);
   try {
     const result = await processMessage("site", body.conversa_id, message, contact);
     return jsonResponse(result, 200, origin);
@@ -470,6 +483,26 @@ async function handleSiteMessage(body: any, origin: string | null): Promise<Resp
       return jsonResponse({ resposta: "Não foi possível registrar sua mensagem agora. Tente novamente em instantes.", escalou: false, ticket_id: null, modelo: null, erro: true }, 503, origin);
     }
   }
+}
+
+async function handleOpenTicket(body: any, origin: string | null): Promise<Response> {
+  if (!originAllowed(origin)) return jsonResponse({ error: "origem não permitida" }, 403, origin);
+  if (body.canal !== "site" || !validConversation(body.conversa_id)) return jsonResponse({ error: "conversa inválida" }, 400, origin);
+  const contact = cleanContact(body.contato);
+  if (!contact?.nome || (!contact.email && !contact.whatsapp)) return jsonResponse({ error: "informe nome e e-mail ou WhatsApp" }, 400, origin);
+  const descricao = typeof body.mensagem === "string" ? body.mensagem.trim().slice(0, MAX_MESSAGE) : "";
+  const open = await findOpenTicket("site", body.conversa_id);
+  if (open) return jsonResponse({ escalou: true, ticket_id: open.id, numero: open.numero, ja_existia: true }, 200, origin);
+  if (descricao) {
+    const { error } = await supabase.from("sup_mensagens").insert({ canal: "site", conversa_id: body.conversa_id, autor: "cliente", conteudo: descricao });
+    if (error) return jsonResponse({ error: "mensagem não registrada" }, 500, origin);
+  }
+  const { data: last } = await supabase.from("sup_mensagens").select("conteudo").eq("canal", "site").eq("conversa_id", body.conversa_id)
+    .eq("autor", "cliente").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const assunto = descricao || last?.conteudo || "Atendimento solicitado pelo cliente";
+  const result = await escalate("site", body.conversa_id, assunto, contact, "pedido_cliente", "", await getConfig());
+  if (!result.ticket_id) return jsonResponse({ error: "não foi possível abrir o ticket" }, 500, origin);
+  return jsonResponse(result, 200, origin);
 }
 
 async function handlePing(origin: string | null): Promise<Response> {
@@ -495,6 +528,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (body?.acao === "responder_humano") return await handleHuman(request, body, origin);
     if (body?.acao === "sugerir") return await handleSuggestion(request, body, origin);
     if (body?.acao === "mensagem") return await handleSiteMessage(body, origin);
+    if (body?.acao === "abrir_ticket") return await handleOpenTicket(body, origin);
     return jsonResponse({ error: "ação inválida" }, 400, origin);
   } catch (error) {
     console.error("support-ai error", String(error));
