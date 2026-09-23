@@ -285,7 +285,8 @@ async function escalate(
     motivo_escalonamento: reason, sugestao_ia: draft || null,
   }).select("id").single();
   let ticket = inserted.data;
-  if (!ticket) {
+  if (inserted.error) {
+    if (inserted.error.code !== "23505") throw new Error(`ticket não criado: ${inserted.error.message}`);
     ticket = await findOpenTicket(canal, conversaId) as { id: string } | null;
   }
   const ticketId = ticket?.id || null;
@@ -365,9 +366,11 @@ async function processMessage(
   }
   if (!best || best.confianca < threshold || best.precisa_humano) {
     const escalated = await escalate(canal, conversaId, message, contact, result.error ? "erro_ia" : "baixa_confianca", best?.resposta || "", config);
-    if (best?.resposta) await supabase.from("sup_tickets").update({ sugestao_ia: best.resposta }).eq("id", escalated.ticket_id || "00000000-0000-0000-0000-000000000000");
+    if (best?.resposta && escalated.ticket_id) await supabase.from("sup_tickets").update({ sugestao_ia: best.resposta }).eq("id", escalated.ticket_id);
     return escalated;
   }
+  const openedMeanwhile = await findOpenTicket(canal, conversaId);
+  if (openedMeanwhile) return { resposta: "", escalou: true, ticket_id: openedMeanwhile.id, modelo: null };
   const { error: answerError } = await supabase.from("sup_mensagens").insert({ canal, conversa_id: conversaId, autor: "ia", conteudo: best.resposta, modelo: model, confianca: best.confianca });
   if (answerError) throw new Error(`resposta IA não registrada: ${answerError.message}`);
   return { resposta: best.resposta, escalou: false, ticket_id: null, modelo: model };
@@ -418,6 +421,7 @@ async function handleHuman(request: Request, body: any, origin: string | null): 
 async function handleSuggestion(request: Request, body: any, origin: string | null): Promise<Response> {
   const user = await requireTeamUser(request);
   if (!user) return jsonResponse({ error: "não autorizado" }, 401, origin);
+  if (!validText(body.ticket_id, 80)) return jsonResponse({ error: "ticket_id é obrigatório" }, 400, origin);
   const { data: ticket } = await supabase.from("sup_tickets").select("id,canal,conversa_id,assunto").eq("id", body.ticket_id).maybeSingle();
   if (!ticket) return jsonResponse({ error: "ticket não encontrado" }, 404, origin);
   const config = await getConfig();
