@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hub de Suporte</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <section id="login-view" class="auth-view" aria-labelledby="login-title">
+      <div class="auth-card">
+        <p class="eyebrow">SUPORTE</p>
+        <h1 id="login-title">Hub de Suporte</h1>
+        <p class="muted">Entre para acompanhar e responder aos atendimentos.</p>
+        <form id="login-form" novalidate>
+          <label for="login-email">E-mail</label>
+          <input id="login-email" name="email" type="email" autocomplete="username" required>
+          <label for="login-password">Senha</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+          <button class="button primary full" type="submit">Entrar</button>
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="no-access-view" class="auth-view" hidden aria-labelledby="no-access-title">
+      <div class="auth-card">
+        <p class="eyebrow">ACESSO RESTRITO</p>
+        <h1 id="no-access-title">Sem acesso ao hub</h1>
+        <p class="muted">Seu usuário foi autenticado, mas ainda não está na equipe de suporte.</p>
+        <button id="no-access-logout" class="button secondary" type="button">Sair</button>
+      </div>
+    </section>
+
+    <div id="hub-view" class="hub-view" hidden>
+      <header class="topbar">
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <div><strong id="business-name">Hub de Suporte</strong><span class="brand-subtitle">Central de atendimento</span></div>
+        </div>
+        <div class="user-block"><span id="current-user" class="muted"></span><button id="logout-button" class="button ghost" type="button">Sair</button></div>
+      </header>
+      <div class="layout">
+        <aside class="sidebar" aria-label="Navegação principal">
+          <nav id="main-nav" class="main-nav">
+            <button class="nav-item active" type="button" data-view="queue-view">Fila <span id="nav-open-count" class="nav-count">0</span></button>
+            <button class="nav-item" type="button" data-view="learn-view">Base que aprende</button>
+            <button class="nav-item" type="button" data-view="kb-view">Base de conhecimento</button>
+            <button class="nav-item" type="button" data-view="dashboard-view">Painel</button>
+          </nav>
+          <p class="sidebar-footer">Dados protegidos pelo Supabase Auth</p>
+        </aside>
+
+        <main class="content">
+          <section id="queue-view" class="page-view">
+            <div class="page-heading"><div><p class="eyebrow">OPERAÇÃO</p><h1>Fila de atendimento</h1><p class="muted">Acompanhe os tickets que precisam de atenção.</p></div><button id="refresh-queue" class="button secondary" type="button">Atualizar</button></div>
+            <div id="queue-tabs" class="tabs" role="tablist" aria-label="Filtrar tickets"></div>
+            <div class="toolbar"><label class="search-field"><span class="sr-only">Buscar tickets</span><input id="ticket-search" type="search" placeholder="Buscar por nome ou assunto"></label><label class="select-field"><span class="sr-only">Ordenar tickets</span><select id="ticket-sort"><option value="priority">Prioridade</option><option value="oldest">Mais antigos</option><option value="newest">Mais recentes</option></select></label></div>
+            <div id="queue-status" class="inline-status" role="status"></div>
+            <div id="ticket-list" class="ticket-list"></div>
+          </section>
+
+          <section id="ticket-view" class="page-view" hidden>
+            <div class="page-heading"><div><button id="back-to-queue" class="button link-button" type="button">← Voltar para a fila</button><p class="eyebrow">TICKET <span id="ticket-number"></span></p><h1 id="ticket-subject">Atendimento</h1><p id="ticket-meta" class="muted"></p></div><div class="ticket-actions"><button id="ticket-refresh" class="button secondary" type="button">Atualizar</button></div></div>
+            <div class="ticket-grid">
+              <div class="conversation-card"><div id="conversation" class="conversation" aria-live="polite"></div><form id="reply-form" class="reply-form"><label for="reply-content">Resposta para o cliente</label><textarea id="reply-content" rows="5" maxlength="4000" required placeholder="Escreva uma resposta..."></textarea><div class="form-actions"><button id="use-suggestion" class="button secondary" type="button" hidden>Usar sugestão</button><button id="reply-button" class="button primary" type="submit">Responder e assumir</button></div><p id="reply-status" class="inline-status" role="status"></p></form></div>
+              <aside class="ticket-sidebar"><div class="panel"><h2>Detalhes</h2><label>Status<select id="ticket-status"><option value="aberto">Aberto</option><option value="em_atendimento">Em atendimento</option><option value="aguardando_cliente">Aguardando cliente</option><option value="resolvido">Resolvido</option></select></label><label>Prioridade<select id="ticket-priority"><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option></select></label><label>Atribuído a<select id="ticket-assignee"></select></label></div><div class="panel"><div class="panel-title"><h2>Sugestão da IA</h2><button id="new-suggestion" class="button small secondary" type="button">Pedir nova</button></div><p id="ai-suggestion" class="suggestion muted">Nenhuma sugestão disponível.</p></div></aside>
+            </div>
+          </section>
+
+          <section id="learn-view" class="page-view" hidden><div class="page-heading"><div><p class="eyebrow">APRENDIZADO</p><h1>Base que aprende</h1><p class="muted">Transforme perguntas recorrentes em respostas aprovadas.</p></div><button id="refresh-candidates" class="button secondary" type="button">Atualizar</button></div><div id="candidate-list" class="candidate-list"></div></section>
+          <section id="kb-view" class="page-view" hidden><div class="page-heading"><div><p class="eyebrow">CONHECIMENTO</p><h1>Base de conhecimento</h1><p class="muted">Edite, busque e desative respostas usadas pela IA.</p></div><button id="refresh-kb" class="button secondary" type="button">Atualizar</button></div><div class="toolbar"><label class="search-field"><span class="sr-only">Buscar na base</span><input id="kb-search" type="search" placeholder="Buscar pergunta, tema ou resposta"></label></div><div id="kb-list" class="kb-list"></div></section>
+          <section id="dashboard-view" class="page-view" hidden><div class="page-heading"><div><p class="eyebrow">VISÃO GERAL</p><h1>Painel</h1><p class="muted">Indicadores dos últimos 7 dias e do dia atual.</p></div><button id="refresh-dashboard" class="button secondary" type="button">Atualizar</button></div><div id="dashboard-cards" class="metric-grid"></div><div class="panel dashboard-note"><h2>Como ler os indicadores</h2><p class="muted">Os dados são calculados a partir das mensagens, tickets e uso de IA registrados no Supabase.</p></div></section>
+        </main>
+      </div>
+    </div>
+  </div>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
