@@ -357,8 +357,6 @@ revoke all on function public.sup_custo_hoje() from public;
 revoke all on function public.sup_reservar_custo(numeric, numeric, text, text) from public;
 grant execute on function public.sup_eh_membro() to authenticated;
 grant execute on function public.sup_eh_admin() to authenticated;
-grant execute on function public.sup_buscar_kb(text, integer) to authenticated;
-grant execute on function public.sup_custo_hoje() to authenticated;
 -- A reserva é uma operação interna da Edge Function: authenticated não pode
 -- escolher limite/estimativa e bloquear o atendimento de outros usuários.
 grant execute on function public.sup_eh_membro() to service_role;
@@ -366,6 +364,9 @@ grant execute on function public.sup_eh_admin() to service_role;
 grant execute on function public.sup_buscar_kb(text, integer) to service_role;
 grant execute on function public.sup_custo_hoje() to service_role;
 grant execute on function public.sup_reservar_custo(numeric, numeric, text, text) to service_role;
+-- Busca na base e custo do dia rodam SECURITY DEFINER: só a Edge Function (service_role) chama.
+revoke execute on function public.sup_buscar_kb(text, integer) from authenticated;
+revoke execute on function public.sup_custo_hoje() from authenticated;
 revoke all on function public.sup_eh_membro() from anon;
 revoke all on function public.sup_eh_admin() from anon;
 revoke all on function public.sup_buscar_kb(text, integer) from anon;
