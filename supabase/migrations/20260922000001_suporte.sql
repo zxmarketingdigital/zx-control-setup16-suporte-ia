@@ -252,8 +252,8 @@ insert into public.sup_config (chave, valor) values
   ('tom_de_voz', to_jsonb('claro, cordial e direto'::text)),
   ('limiar_confianca', '0.7'::jsonb),
   ('teto_diario_usd', '2.0'::jsonb),
-  ('modelo_barato', to_jsonb('gemini-2.5-flash-lite'::text)),
-  ('modelo_forte', to_jsonb('gemini-2.5-flash'::text)),
+  ('modelo_barato', to_jsonb('gemini-flash-lite-latest'::text)),
+  ('modelo_forte', to_jsonb('gemini-flash-latest'::text)),
   ('provedor', to_jsonb('gemini'::text)),
   ('mensagem_transbordo', to_jsonb('Vou encaminhar sua mensagem para uma pessoa da equipe. Assim que possível, alguém continuará o atendimento.'::text)),
   ('horario_humano', to_jsonb('horário comercial'::text))

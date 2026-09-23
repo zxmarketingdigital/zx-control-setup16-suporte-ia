@@ -21,6 +21,8 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
 });
 
 const PRICE_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
+  "gemini-flash-lite-latest": { input: 0.1, output: 0.4 },
+  "gemini-flash-latest": { input: 0.3, output: 2.5 },
   "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "gemini-2.5-flash": { input: 0.3, output: 2.5 },
   "gemini-2.0-flash": { input: 0.1, output: 0.4 },
@@ -343,8 +345,8 @@ async function processMessage(
     .eq("canal", canal).eq("conversa_id", conversaId).order("created_at", { ascending: false }).limit(8);
   if (historyError) throw new Error(`histórico indisponível: ${historyError.message}`);
   const provider = configString(config, "provedor", "gemini");
-  const cheap = configString(config, "modelo_barato", provider === "anthropic" ? "claude-haiku-4-5-20251001" : "gemini-2.5-flash-lite");
-  const strong = configString(config, "modelo_forte", provider === "anthropic" ? "claude-sonnet-5" : "gemini-2.5-flash");
+  const cheap = configString(config, "modelo_barato", provider === "anthropic" ? "claude-haiku-4-5-20251001" : "gemini-flash-lite-latest");
+  const strong = configString(config, "modelo_forte", provider === "anthropic" ? "claude-sonnet-5" : "gemini-flash-latest");
   const threshold = configNumber(config, "limiar_confianca", DEFAULT_THRESHOLD);
   const prompt = promptFor(config, message, (kb || []) as KBItem[], (history || []).reverse(), contact);
   if (!("teto_diario_usd" in config) || !("provedor" in config)) {
@@ -428,7 +430,7 @@ async function handleSuggestion(request: Request, body: any, origin: string | nu
   const { data: kb } = await supabase.rpc("sup_buscar_kb", { consulta: ticket.assunto, limite: 5 });
   const prompt = promptFor(config, ticket.assunto, (kb || []) as KBItem[], [], undefined);
   const provider = configString(config, "provedor", "gemini");
-  const model = configString(config, "modelo_forte", provider === "anthropic" ? "claude-sonnet-5" : "gemini-2.5-flash");
+  const model = configString(config, "modelo_forte", provider === "anthropic" ? "claude-sonnet-5" : "gemini-flash-latest");
   const reservation = await reserveCost(configNumber(config, "teto_diario_usd", DEFAULT_DAILY_LIMIT), model, "forte", prompt);
   if (reservation === null) return jsonResponse({ error: "teto diário atingido" }, 429, origin);
   const result = await callModel(provider, model, prompt);

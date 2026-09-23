@@ -65,6 +65,11 @@ def _modelos_gemini(chave):
 
 
 def _escolher_modelos(nomes):
+    # Aliases "-latest" seguem o modelo vigente e respondem mesmo quando a chave
+    # não tem acesso aos nomes versionados (que o /models lista, mas devolvem 404).
+    if "gemini-flash-lite-latest" in nomes and "gemini-flash-latest" in nomes:
+        return "gemini-flash-lite-latest", "gemini-flash-latest"
+
     def chave_modelo(nome):
         partes = []
         for parte in nome.replace("-", ".").split("."):
@@ -74,7 +79,7 @@ def _escolher_modelos(nomes):
     ordenados = sorted(set(nomes), key=chave_modelo, reverse=True)
     lite = next((nome for nome in ordenados if "flash-lite" in nome or "flash_lite" in nome), None)
     forte = next((nome for nome in ordenados if ("flash" in nome or "pro" in nome) and "lite" not in nome), None)
-    return lite or "gemini-2.5-flash-lite", forte or "gemini-2.5-flash"
+    return lite or "gemini-flash-lite-latest", forte or "gemini-flash-latest"
 
 
 def _validar_gemini(chave, modelo):
