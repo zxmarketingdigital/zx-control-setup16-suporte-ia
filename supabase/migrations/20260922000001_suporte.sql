@@ -255,7 +255,8 @@ insert into public.sup_config (chave, valor) values
   ('modelo_barato', to_jsonb('gemini-flash-lite-latest'::text)),
   ('modelo_forte', to_jsonb('gemini-flash-latest'::text)),
   ('provedor', to_jsonb('gemini'::text)),
-  ('mensagem_transbordo', to_jsonb('Vou encaminhar sua mensagem para uma pessoa da equipe. Assim que possível, alguém continuará o atendimento.'::text)),
+  ('mensagem_transbordo', to_jsonb('Essa eu não sei responder com segurança e prefiro não te passar uma informação errada.'::text)),
+  ('whatsapp_atendimento', to_jsonb(''::text)),
   ('horario_humano', to_jsonb('horário comercial'::text))
 on conflict (chave) do nothing;
 

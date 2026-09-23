@@ -70,6 +70,7 @@
     ".ticket{display:flex;align-items:center;gap:12px;margin-top:14px;border-color:color-mix(in srgb,var(--ac) 55%,var(--bd))}",
     ".ticket .num{flex:0 0 auto;display:grid;place-items:center;min-width:52px;height:40px;padding:0 8px;border-radius:10px;background:color-mix(in srgb,var(--ac) 22%,transparent);color:#fff;font-weight:700}",
     ".ticket p{color:var(--mu);font-size:12.5px}.ticket strong{font-size:14px}",
+    ".ticket .wa{display:inline-flex;margin-top:8px;padding:7px 12px;border-radius:9px;background:#25D366;color:#06301a;font-weight:700;font-size:12.5px;text-decoration:none}",
     ".open-form textarea{min-height:80px;resize:vertical}.open-form .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}",
     "@media(max-width:520px){.cta{flex-direction:column;align-items:stretch}.float{right:8px;left:8px;width:auto;bottom:80px;height:calc(100vh - 100px)}.launcher{right:14px;bottom:14px}}"
   ].join("");
@@ -203,7 +204,7 @@
     msgs.setAttribute("aria-live", "polite");
     var empty = el("div", "empty");
     empty.appendChild(el("strong", "", "Olá, " + ((contact && contact.nome) || "").split(" ")[0] + "! Como posso ajudar?"));
-    empty.appendChild(el("span", "", "Respondo com base na nossa base de conhecimento. Se eu não resolver, a equipe continua o atendimento por aqui."));
+    empty.appendChild(el("span", "", "Respondo na hora com base nas informações oficiais. Se eu não souber, abro um ticket e a equipe te chama no WhatsApp."));
     msgs.appendChild(empty);
     chat.appendChild(msgs);
     var composer = el("form", "composer");
@@ -251,10 +252,11 @@
   function setTicket(result) {
     if (!result || !result.ticket_id) return;
     var novo = !ticket || ticket.id !== result.ticket_id;
-    ticket = { id: result.ticket_id, numero: result.numero || (ticket && ticket.numero) || null };
+    ticket = { id: result.ticket_id, numero: result.numero || (ticket && ticket.numero) || null,
+      whats: result.whatsapp_equipe || (ticket && ticket.whats) || null };
     save(KEY_TICKET, JSON.stringify(ticket));
     renderTicketBox();
-    if (novo) sys("Ticket " + (ticket.numero ? "#" + ticket.numero + " " : "") + "aberto. A equipe responde por aqui mesmo — pode deixar esta página aberta ou voltar depois.");
+    if (novo) sys("Ticket " + (ticket.numero ? "#" + ticket.numero + " " : "") + "aberto");
     startPolling();
   }
 
@@ -266,7 +268,14 @@
       box.appendChild(el("div", "num", ticket.numero ? "#" + ticket.numero : "✓"));
       var t = el("div");
       t.appendChild(el("strong", "", "Seu ticket está com a equipe"));
-      t.appendChild(el("p", "", "As respostas aparecem nesta conversa. Pode mandar mais detalhes a qualquer momento."));
+      var canal = contact && contact.whatsapp ? "no seu WhatsApp" : "no seu e-mail";
+      t.appendChild(el("p", "", "Vamos te chamar " + canal + " para resolver. Pode mandar mais detalhes aqui que eles entram no ticket."));
+      if (ticket.whats) {
+        var direto = el("a", "wa", "Falar agora no WhatsApp");
+        direto.href = "https://wa.me/" + String(ticket.whats).replace(/\D/g, "");
+        direto.target = "_blank"; direto.rel = "noopener";
+        t.appendChild(direto);
+      }
       box.appendChild(t);
       ticketBox.appendChild(box);
       return;
@@ -274,7 +283,7 @@
     var cta = el("div", "card cta");
     var txt = el("div");
     txt.appendChild(el("h3", "", "Não resolveu?"));
-    txt.appendChild(el("p", "", "Abra um ticket e a equipe continua o atendimento por aqui."));
+    txt.appendChild(el("p", "", "Abra um ticket e a equipe te chama no WhatsApp para resolver."));
     var open = el("button", "btn", "Abrir ticket");
     open.type = "button";
     open.addEventListener("click", renderOpenForm);
@@ -306,6 +315,7 @@
       try {
         var result = await request({ acao: "abrir_ticket", canal: "site", conversa_id: conversationId, contato: contact, mensagem: texto });
         if (texto) bubble(texto, "cliente");
+        if (result.resposta) bubble(result.resposta, "ia");
         setTicket(result);
       } catch (e) {
         err.textContent = e.message; err.hidden = false; ok.disabled = false;

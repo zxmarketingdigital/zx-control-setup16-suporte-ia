@@ -135,7 +135,8 @@
   async function openTicket(id) {
     var ticket = state.tickets.find(function (item) { return item.id === id; }); if (!ticket) return;
     state.currentTicket = ticket; $("ticket-number").textContent = ticket.numero ? "#" + ticket.numero : ""; $("ticket-subject").textContent = ticket.assunto || "Sem assunto";
-    $("ticket-meta").textContent = (ticket.contato_nome || "Contato sem nome") + " · " + (ticket.canal || "—") + " · criado em " + formatDate(ticket.created_at);
+    var meta = $("ticket-meta"); meta.textContent = (ticket.contato_nome || "Contato sem nome") + " · " + (ticket.canal || "—") + " · criado em " + formatDate(ticket.created_at) + (ticket.contato_email ? " · " + ticket.contato_email : "");
+    if (ticket.contato_whatsapp) { meta.appendChild(document.createTextNode(" · ")); var wa = make("a", "", "WhatsApp " + ticket.contato_whatsapp); wa.href = "https://wa.me/" + String(ticket.contato_whatsapp).replace(/\D/g, ""); wa.target = "_blank"; wa.rel = "noopener"; meta.appendChild(wa); }
     $("ticket-status").value = ticket.status || "aberto"; $("ticket-priority").value = ticket.prioridade || "normal"; renderAssignees(ticket.atribuido_a); $("ai-suggestion").textContent = ticket.sugestao_ia || "Nenhuma sugestão disponível."; setHidden($("use-suggestion"), !ticket.sugestao_ia); setStatus($("reply-status"), "", false); $("reply-content").value = "";
     showPage("ticket-view"); clear($("conversation")); $("conversation").appendChild(make("p", "loading", "Carregando conversa…"));
     var result = await client.from("sup_mensagens").select("*").eq("ticket_id", id).order("created_at", { ascending: true });

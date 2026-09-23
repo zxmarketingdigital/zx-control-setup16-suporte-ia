@@ -90,7 +90,16 @@ def _configurar_negocio(config):
     descricao_atual = atuais.get("negocio_descricao")
     nome = ask("Nome do negócio", str(nome_atual) if nome_atual and nome_atual != "Seu negócio" else None)
     descricao = ask("Descrição curta do negócio", str(descricao_atual) if descricao_atual and descricao_atual != "Atendimento ao cliente" else None)
-    corpo = [{"chave": "negocio_nome", "valor": nome}, {"chave": "negocio_descricao", "valor": descricao}]
+    whats_atual = atuais.get("whatsapp_atendimento")
+    print("  O WhatsApp de atendimento aparece para o cliente quando a IA não sabe responder e abre um ticket")
+    print("  (\"se preferir, fale direto com a gente no WhatsApp ...\"). Use o número do NEGÓCIO, nunca um pessoal.")
+    whats = ask("WhatsApp de atendimento com DDI (ex.: 5511999999999) — Enter para não mostrar", str(whats_atual) if whats_atual else "")
+    whats = "".join(ch for ch in whats if ch.isdigit())
+    if whats and not 8 <= len(whats) <= 15:
+        print("  ⚠️  Número inválido — deixei sem WhatsApp de atendimento. Rode esta etapa de novo para corrigir.")
+        whats = ""
+    corpo = [{"chave": "negocio_nome", "valor": nome}, {"chave": "negocio_descricao", "valor": descricao},
+             {"chave": "whatsapp_atendimento", "valor": whats}]
     status, _ = supabase_rest(
         config,
         "POST",
@@ -104,7 +113,8 @@ def _configurar_negocio(config):
         return False
     status, rows = supabase_rest(config, "GET", "/sup_config?select=chave,valor", service=True)
     conferidos = {row.get("chave"): row.get("valor") for row in rows or [] if isinstance(row, dict)} if status == 200 else {}
-    ok = conferidos.get("negocio_nome") == nome and conferidos.get("negocio_descricao") == descricao
+    ok = (conferidos.get("negocio_nome") == nome and conferidos.get("negocio_descricao") == descricao
+          and conferidos.get("whatsapp_atendimento", "") == whats)
     print("  ✅ Configuração do negócio conferida" if ok else "  ❌ Configuração do negócio não foi conferida")
     return ok
 
