@@ -13,9 +13,10 @@ from _comum import (
     REPO_ROOT,
     ask,
     cfg_get,
-    load_config,
+    ensure_config,
     save_config,
     supabase_rest,
+    supabase_url_canonica,
     suporte_cfg,
 )
 
@@ -122,24 +123,57 @@ def _configurar_negocio(config):
     return ok
 
 
-def main():
-    inicio = time.monotonic()
-    config = load_config()
-    suporte = suporte_cfg(config)
+def _coletar_credenciais(config, suporte):
+    """Garante project ref, URL, anon key e service role key no config.
+
+    Este setup não depende de instalação anterior: o que já estiver no config.json
+    é reaproveitado; o que faltar é pedido aqui (chaves via getpass, sem eco).
+    Devolve False se a URL informada for inválida.
+    """
+    faltando = [nome for nome in ("supabase_url", "supabase_anon_key", "supabase_service_role_key")
+                if not cfg_get(config, nome, "")]
+    if faltando:
+        print("ℹ️  Faltam credenciais do Supabase neste computador (%s)." % ", ".join(faltando))
+        print("   Se você ainda não tem um projeto: crie um grátis em supabase.com (New project),")
+        print("   depois abra Project Settings > API e copie Project URL, anon public e service_role.")
     projeto = cfg_get(config, "supabase_project_id", "") or suporte.get("project_ref", "")
-    projeto = ask("Project ref do Supabase", projeto or None)
+    projeto = ask("Project ref do Supabase (o trecho antes de .supabase.co)", projeto or None)
+    url = str(cfg_get(config, "supabase_url", "")).strip()
+    if not url:
+        url = ask("URL do projeto Supabase", "https://%s.supabase.co" % projeto)
+    # A service role key vai para esta URL: só o domínio oficial https://<ref>.supabase.co.
+    url = supabase_url_canonica(url, projeto)
+    if not url:
+        print("❌ A URL do Supabase precisa ser https://%s.supabase.co (o mesmo project ref, só letras minúsculas e números)." % (projeto or "<ref>"))
+        return False
+    projeto = projeto or url.split("//")[1].split(".")[0]
+    anon_key = cfg_get(config, "supabase_anon_key", "")
+    if not anon_key:
+        anon_key = ask("Anon key do Supabase (chave pública; não será exibida)", secret=True)
     service_key = cfg_get(config, "supabase_service_role_key", "")
     if not service_key:
         service_key = ask("Service role key do Supabase (não será exibida)", secret=True)
+    if not cfg_get(config, "supabase_anon_key", ""):
+        config["supabase_anon_key"] = anon_key
+    config["supabase_url"] = url
     config["supabase_project_id"] = projeto
     config["supabase_service_role_key"] = service_key
     suporte["project_ref"] = projeto
+    return True
+
+
+def main():
+    inicio = time.monotonic()
+    config, _ = ensure_config()
+    suporte = suporte_cfg(config)
+    if not _coletar_credenciais(config, suporte):
+        return 1
     save_config(config)
 
     cli = _cli()
     cli_ok = False
     if cli:
-        link_ok, link_msg, link_time = _run_long(cli + ["link", "--project-ref", projeto])
+        link_ok, link_msg, link_time = _run_long(cli + ["link", "--project-ref", suporte["project_ref"]])
         print("%s link em %.1fs: %s" % ("✅" if link_ok else "⚠️", link_time, link_msg or "sem saída"))
         if link_ok:
             push_ok, push_msg, push_time = _run_long(cli + ["db", "push"])

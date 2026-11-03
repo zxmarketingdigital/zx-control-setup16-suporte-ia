@@ -28,6 +28,7 @@ from _comum import (  # noqa: E402
     save_config,
     sair,
     suporte_cfg,
+    supabase_base,
     supabase_rest,
 )
 
@@ -54,7 +55,7 @@ def auth_headers(service_key):
 
 
 def auth_users(config, service_key):
-    base = str(cfg_get(config, "supabase_url", "")).rstrip("/")
+    base = supabase_base(config)
     todos = []
     pagina = 1
     while True:
@@ -84,7 +85,7 @@ def ensure_user(config, service_key, email, nome, admin=False):
     if found and found.get("id"):
         return str(found["id"]), False
     senha = ask("Senha do usuário " + email, secret=True)
-    base = str(cfg_get(config, "supabase_url", "")).rstrip("/")
+    base = supabase_base(config)
     payload = {"email": email, "password": senha, "email_confirm": True, "user_metadata": {"nome": nome}}
     status, body = http_json("POST", base + "/auth/v1/admin/users", headers=auth_headers(service_key), corpo=payload)
     if status not in (200, 201):

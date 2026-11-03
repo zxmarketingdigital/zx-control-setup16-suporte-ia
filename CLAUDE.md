@@ -15,6 +15,16 @@ Conduza uma Etapa por vez, conferindo o efeito real antes de avançar.
 - Para envio externo, mostre o que será feito e aguarde confirmação quando o
   método da Etapa pedir isso.
 
+## Independência
+
+Este setup não exige nenhum setup anterior. A Etapa 0 cria
+`~/.operacao-ia/config/config.json` mínimo se não existir (ou reaproveita o que
+já estiver válido). Se o aluno não tiver as credenciais do Supabase no config,
+a Etapa 1 as coleta: se ele ainda não tem projeto, oriente a criar um grátis em
+supabase.com (New project) e copiar Project URL, anon key e service role key em
+Project Settings > API. Nunca mande o aluno "concluir o Setup 1/2". Resend é
+opcional e nunca bloqueia.
+
 ## Fluxo
 
 Use `python3 skills/suporte-ia/estado.py status` no início e após cada Etapa.

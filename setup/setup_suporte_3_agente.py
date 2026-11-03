@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _comum import ask, cfg_get, http_json, load_config, save_config, supabase_rest, suporte_cfg
+from _comum import ask, cfg_get, http_json, load_config, save_config, supabase_base, supabase_rest, suporte_cfg
 
 
 def _timeout(name, default):
@@ -191,7 +191,7 @@ def main():
     inicio = time.monotonic()
     config = load_config()
     suporte = suporte_cfg(config)
-    base = str(cfg_get(config, "supabase_url", "")).rstrip("/")
+    base = supabase_base(config)
     if not base:
         print("❌ Supabase URL ausente; conclua a Etapa 1 primeiro.")
         return 1

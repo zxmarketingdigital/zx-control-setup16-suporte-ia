@@ -11,11 +11,14 @@ definido pelo aluno; o sistema não inventa políticas do negócio.
 
 ## Pré-requisitos
 
-- Setups 1 e 2 concluídos, com Python 3.9 ou mais recente compatível, Git e
-  `~/.operacao-ia/config/config.json` criado.
-- Conta Supabase própria, Supabase CLI, Node/npx e Wrangler disponíveis.
-- Resend configurado para receber a auditoria por e-mail. Sem Resend, use o
-  relatório local e `--sem-email`.
+- Não exige setup anterior — se você já tem outro setup instalado, ele aproveita
+  o que estiver válido em `~/.operacao-ia/config/config.json`; se não existir, a
+  Etapa 0 cria o arquivo mínimo.
+- Python 3.9 ou mais recente compatível e Git.
+- Conta Supabase própria (grátis em supabase.com; a Etapa 1 pede Project URL,
+  anon key e service role key), Supabase CLI, Node/npx e Wrangler disponíveis.
+- Resend (opcional) para receber a auditoria por e-mail. Sem Resend, a auditoria
+  grava o relatório local e avisa que o e-mail não foi enviado.
 - Um repositório público acessível ao aluno e um terminal com Claude Code.
 
 ## Instalação guiada

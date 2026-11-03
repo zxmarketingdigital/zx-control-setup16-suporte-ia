@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _comum import cfg_get, http_json, load_config, supabase_rest
+from _comum import cfg_get, http_json, load_config, supabase_base, supabase_rest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,7 +20,7 @@ def check(nome, func):
 
 
 def http_base(config):
-    return str(cfg_get(config, "supabase_url", "")).rstrip("/")
+    return supabase_base(config)
 
 
 def tabelas(config):

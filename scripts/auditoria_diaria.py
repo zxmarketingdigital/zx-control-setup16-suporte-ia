@@ -181,6 +181,11 @@ def main(argv=None):
         print("Relatório local conferido: %s" % caminho)
         if bloqueado:
             print("Envio bloqueado por %s." % ("--dry-run" if args.dry_run else "--sem-email"))
+        elif not cfg_get(config, "resend_api_key", "") or not cfg_get(config, "email_aluno", ""):
+            # Resend é opcional: sem ele o relatório local acima já é o resultado.
+            print("Aviso: Resend ou email_aluno não configurado; e-mail não enviado. "
+                  "O relatório local foi gravado. Para receber por e-mail, grave resend_api_key "
+                  "e email_aluno no config.json.")
         else:
             identificador = enviar(config, conteudo)
             print("E-mail confirmado pelo Resend: %s" % identificador)

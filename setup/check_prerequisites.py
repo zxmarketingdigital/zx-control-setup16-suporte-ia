@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Etapa 0: confere o ambiente local antes de instalar o Setup 16."""
+"""Etapa 0: confere o ambiente local antes de instalar o Setup 16.
+
+Não exige nenhum setup anterior: cria o config.json mínimo se não existir e
+reaproveita o que já estiver válido. As credenciais do Supabase que faltarem
+são coletadas na Etapa 1."""
 import os
 import shutil
 import subprocess
@@ -9,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _comum import CONFIG_PATH, cfg_get, load_config
+from _comum import CONFIG_PATH, ConfigBackupError, cfg_get, ensure_config
 
 
 def _timeout(name, default):
@@ -58,7 +62,6 @@ def _linha(status, nome, detalhe, instrucao):
 
 def main():
     inicio = time.monotonic()
-    config = load_config()
     obrigatorias = []
 
     if sys.version_info >= (3, 9):
@@ -78,22 +81,30 @@ def main():
         if not ok:
             obrigatorias.append(nome)
 
-    if CONFIG_PATH.is_file():
-        url = cfg_get(config, "supabase_url", "")
-        anon = cfg_get(config, "supabase_anon_key", "")
-        if url and anon:
-            _linha("ok", "config Supabase", "URL e anon configurados", "")
-        else:
-            _linha("fail", "config Supabase", "arquivo existe, mas faltam supabase_url ou anon", "rode a configuração do Supabase e grave URL + anon em %s" % CONFIG_PATH)
-            obrigatorias.append("config Supabase")
+    try:
+        config, nota = ensure_config()
+        _linha("ok", "config.json", nota, "")
+    except ConfigBackupError:
+        # backup do config corrompido falhou: mensagem ja impressa, original intacto. Nao segue como concluida.
+        _linha("fail", "config.json", "não consegui guardar a cópia de segurança do config.json inválido", "verifique a permissão da pasta %s e rode de novo" % CONFIG_PATH.parent)
+        print("\nEtapa 0 NÃO concluída: o config.json original foi preservado.")
+        return 1
+    except OSError as exc:
+        _linha("fail", "config.json", "não consegui preparar %s (%s)" % (CONFIG_PATH, exc), "verifique a permissão da pasta %s e rode de novo" % CONFIG_PATH.parent)
+        print("\nEtapa 0 NÃO concluída: o config.json não foi preparado.")
+        return 1
+
+    url = cfg_get(config, "supabase_url", "")
+    anon = cfg_get(config, "supabase_anon_key", "")
+    if url and anon:
+        _linha("ok", "config Supabase", "URL e anon configurados", "")
     else:
-        _linha("fail", "config.json", "arquivo ausente", "execute o Setup anterior que cria %s" % CONFIG_PATH)
-        obrigatorias.append("config.json")
+        _linha("warn", "config Supabase", "ainda não configurado; a Etapa 1 pede URL, anon key e service role key do seu projeto", "se ainda não tem projeto, crie um grátis em supabase.com (New project) e copie as chaves em Project Settings > API")
 
     if cfg_get(config, "resend_api_key", ""):
         _linha("ok", "Resend", "configurado; auditoria poderá enviar e-mail", "")
     else:
-        _linha("warn", "Resend", "não configurado; auditoria não enviará e-mail", "grave resend_api_key no config.json quando quiser habilitar e-mail")
+        _linha("warn", "Resend", "não configurado; auditoria não enviará e-mail", "grave resend_api_key e email_aluno no config.json quando quiser habilitar e-mail (opcional)")
 
     elapsed = time.monotonic() - inicio
     print("\nEtapa 0 concluída em %.2fs." % elapsed)
