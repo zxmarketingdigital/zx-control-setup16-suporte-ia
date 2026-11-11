@@ -23,8 +23,12 @@ definido pelo aluno; o sistema não inventa políticas do negócio.
 
 ## Instalação guiada
 
+No Windows, abra o PowerShell (no Mac e no Linux, o Terminal) e rode uma linha de cada vez:
+
 ```bash
-gh repo clone zxmarketingdigital/zx-control-setup16-suporte-ia && cd zx-control-setup16-suporte-ia && claude
+gh repo clone zxmarketingdigital/zx-control-setup16-suporte-ia
+cd zx-control-setup16-suporte-ia
+claude
 ```
 
 No Claude Code, digite:
